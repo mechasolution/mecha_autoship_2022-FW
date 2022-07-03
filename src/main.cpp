@@ -43,7 +43,7 @@ struct SensorData_t {
   float IMU_GYR_OFFSET_Z;
 
   // GPS
-  uint8_t GPS_LATITUDE[11];  // 위도
+  uint8_t GPS_LATITUDE[10];  // 위도
   uint8_t GPS_LONGITUDE[12]; // 경도
   uint8_t GPS_IS_VALID; // 유효 여부. 0=false, 1=true
 
@@ -103,9 +103,12 @@ void setup() {
 
   setOffset();
 
+  strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
+  strcpy((char*)SensorData.GPS_LONGITUDE, "0000.0000");
+
   hwSerialCommandQueue = xQueueCreate(COMMAND_QUEUE_SIZE, sizeof(uint8_t));
 
-  xTaskCreate(taskHwSerial, "taskHwSerial", STACK_SIZE, NULL, 0, NULL); // 우선순위 숫자 비례
+  xTaskCreate(taskHwSerial, "taskHwSerial", STACK_SIZE, NULL, 2, NULL); // 우선순위 숫자 비례
 
   xTaskCreate(taskGetIMU, "taskGetIMU", STACK_SIZE*2, NULL, 1, NULL);
   xTaskCreate(taskGetMAG, "taskGetMAG", STACK_SIZE*2, NULL, 0, NULL);
@@ -262,6 +265,9 @@ void setOffset() {
 void setPWM(int _bldc, int _servo) {
   pwmServo.write(_servo);
   pwmBLDC.write(_bldc);
+
+  SensorData.SERVO_DEGREE = _servo;
+  SensorData.BLDC_POWER = _bldc;
 }
 
 void queryOrder(uint8_t *_data, uint8_t _dataLen) {
@@ -365,7 +371,7 @@ void queryGPS(uint8_t *_data, uint8_t _dataLen) {
           break;
         case 5: // 경도
           if(ptr[0] == 0)
-            strcpy((char*)SensorData.GPS_LATITUDE, "00000.0000");
+            strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
           else
             strcpy((char*)SensorData.GPS_LONGITUDE, ptr);
           break;
@@ -403,6 +409,7 @@ void taskGetGPS(void *par) {
     while(Serial1.available()) {
       arrBuffUART[len++] = Serial1.read();
       if(arrBuffUART[len - 1] == '\n') {
+        arrBuffUART[len] = '\0';
         queryGPS(arrBuffUART, len);
         len = 0;
       }
