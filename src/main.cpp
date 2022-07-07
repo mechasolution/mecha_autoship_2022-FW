@@ -1,3 +1,4 @@
+#include <Adafruit_NeoPixel.h>
 #include <Arduino.h>
 #include <Arduino_LSM6DS3.h>
 #include <FreeRTOS_SAMD21.h>
@@ -16,14 +17,17 @@
 #define UART_BUFF_SIZE (10) // HW UART 버퍼 크기
 #define COMMAND_QUEUE_SIZE (10) // 데이터 요청 리스트 큐 크기
 
-TaskHandle_t taskHwSerialSendDataTask;
+#define RGBW_RING_SIZE 8 // 네오픽셀링 네오픽셀 개수
 
 QueueHandle_t hwSerialCommandQueue;   // 시리얼 데이터 요청 리스트
+
 Servo pwmServo;
 Servo pwmBLDC;
 
+Adafruit_NeoPixel pixelRing(RGBW_RING_SIZE, 12, NEO_GRBW + NEO_KHZ800);
+
 struct SensorData_t {
-  // IMU (MPU6050)
+  // IMU
   float IMU_ACC_X; // 가속도
   float IMU_ACC_Y;
   float IMU_ACC_Z;
@@ -35,10 +39,7 @@ struct SensorData_t {
   float IMU_MAG_Z;
   int16_t IMU_TEMP; // 내장 온도센서
 
-  float IMU_ACC_OFFSET_X;
-  float IMU_ACC_OFFSET_Y;
-  float IMU_ACC_OFFSET_Z;
-  float IMU_GYR_OFFSET_X;
+  float IMU_GYR_OFFSET_X; // 자이로 센서 오프셋
   float IMU_GYR_OFFSET_Y;
   float IMU_GYR_OFFSET_Z;
 
@@ -59,8 +60,10 @@ void taskHwSerial(void *par);
 void taskGetIMU(void *par);
 void taskGetGPS(void *par);
 void taskGetMAG(void *par);
-
 void taskHwSerialSendData(void *par);
+
+void setOffset();
+void setRingColor(uint32_t color);
 
 void initSerial() {
   Serial.begin(115200);
@@ -93,18 +96,26 @@ void initMAG() {
   delay(10);
 }
 
-void setOffset();
+void initRing() {
+  pixelRing.begin();
+  pixelRing.show();
+  pixelRing.setBrightness(255);
+}
+
 
 void setup() {
   initSerial();
   initIMU();
   initMAG();
   initPWM();
+  initRing();
 
+  setRingColor(pixelRing.Color(255, 0, 0, 0));
   setOffset();
+  setRingColor(pixelRing.Color(0, 0, 0, 255));
 
   strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
-  strcpy((char*)SensorData.GPS_LONGITUDE, "0000.0000");
+  strcpy((char*)SensorData.GPS_LATITUDE, "0000.0000");
 
   hwSerialCommandQueue = xQueueCreate(COMMAND_QUEUE_SIZE, sizeof(uint8_t));
 
@@ -113,7 +124,7 @@ void setup() {
   xTaskCreate(taskGetIMU, "taskGetIMU", STACK_SIZE*2, NULL, 1, NULL);
   xTaskCreate(taskGetMAG, "taskGetMAG", STACK_SIZE*2, NULL, 0, NULL);
   xTaskCreate(taskGetGPS, "taskGetGPS", STACK_SIZE*3, NULL, 0, NULL);
-  xTaskCreate(taskHwSerialSendData, "taskHwSerialSendData", STACK_SIZE, NULL, 2, &taskHwSerialSendDataTask);
+  xTaskCreate(taskHwSerialSendData, "taskHwSerialSendData", STACK_SIZE, NULL, 2, NULL);
   vTaskStartScheduler();
 
   for(;;) {}
@@ -143,47 +154,26 @@ char *strsep(char **stringp, const char *delim) { // 문자열 파싱 함수
   return ptr;
 }
 
+void setRingColor(uint32_t color) {
+  for (int i = 0; i < RGBW_RING_SIZE; i++) {
+    pixelRing.setPixelColor(i, color);
+  }
+  pixelRing.show();
+}
+
 void setOffset() {
-  // vTaskSuspend(taskHwSerialSendDataTask);
   // gyroscope
   bool update_gX = true;
   bool update_gY = true;
   bool update_gZ = true;
 
-  // accelerometer
-  bool update_aX = true;
-  bool update_aY = true;
-  bool update_aZ = true;
-
   int cnt = 500;
   while (1) { // offset adjusting loop
-    if(IMU.accelerationAvailable()) {
-      IMU.readAcceleration(SensorData.IMU_ACC_X, SensorData.IMU_ACC_Y, SensorData.IMU_ACC_Z);
-      SensorData.IMU_ACC_X -= SensorData.IMU_ACC_OFFSET_X;
-      SensorData.IMU_ACC_Y -= SensorData.IMU_ACC_OFFSET_Y;
-      SensorData.IMU_ACC_Z -= SensorData.IMU_ACC_OFFSET_Z;
-    }
     if(IMU.gyroscopeAvailable()) {
       IMU.readGyroscope(SensorData.IMU_GYR_X, SensorData.IMU_GYR_Y, SensorData.IMU_GYR_Z);
       SensorData.IMU_GYR_X -= SensorData.IMU_GYR_OFFSET_X;
       SensorData.IMU_GYR_Y -= SensorData.IMU_GYR_OFFSET_Y;
       SensorData.IMU_GYR_Z -= SensorData.IMU_GYR_OFFSET_Z;
-    }
-
-    if(SensorData.IMU_ACC_X > 0) {
-      SensorData.IMU_ACC_OFFSET_X+=0.01;
-    } else if(SensorData.IMU_ACC_X < 0) {
-      SensorData.IMU_ACC_OFFSET_X-=0.01;
-    }
-    if(SensorData.IMU_ACC_Y > 0) {
-      SensorData.IMU_ACC_OFFSET_Y+=0.01;
-    } else if(SensorData.IMU_ACC_Y < 0) {
-      SensorData.IMU_ACC_OFFSET_Y-=0.01;
-    }
-    if(SensorData.IMU_ACC_Z > 0) {
-      SensorData.IMU_ACC_OFFSET_Z+=0.01;
-    } else if(SensorData.IMU_ACC_Z < 0) {
-      SensorData.IMU_ACC_OFFSET_Z-=0.01;
     }
 
     if(SensorData.IMU_GYR_X > 0) {
@@ -202,14 +192,7 @@ void setOffset() {
       SensorData.IMU_GYR_OFFSET_Z-=0.01;
     }
 
-    float maximum_error = 0.01;  // set maximum deviation to 5 LSB
-    if(abs(SensorData.IMU_ACC_X) <= maximum_error)
-      update_aX = false;
-    if(abs(SensorData.IMU_ACC_Y) <= maximum_error)
-      update_aY = false;
-    if(abs(SensorData.IMU_ACC_Z) <= maximum_error)
-      update_aZ = false;
-
+    float maximum_error = 0.01;
     if(abs(SensorData.IMU_GYR_X) <= maximum_error)
       update_gX = false;
     if(abs(SensorData.IMU_GYR_Y) <= maximum_error)
@@ -217,8 +200,7 @@ void setOffset() {
     if(abs(SensorData.IMU_GYR_Z) <= maximum_error)
       update_gZ = false;
 
-    if (update_gX == false && update_gY == false && update_gZ == false &&
-        update_aX == false && update_aY == false && update_aZ == false) {
+    if (update_gX == false && update_gY == false && update_gZ == false) {
       if(--cnt <= 0) {
         break;
       } else {
@@ -259,7 +241,6 @@ void setOffset() {
 
     delay(10);
   }
-  // vTaskResume(taskHwSerialSendDataTask);
 }
 
 void setPWM(int _bldc, int _servo) {
@@ -301,13 +282,26 @@ void queryOrder(uint8_t *_data, uint8_t _dataLen) {
     case 'C' :
       switch(_data[2]) {
         case 'D' : // 모터 설정 $CD,(BLDC),(서보)\n
-          // char *_bldc, _servo;
           int _bldc, _servo;
           strtok((char*)_data, ","); // $CD
           _bldc = atoi(strtok(NULL, ",")); // (BLDC)
           _servo = atoi(strtok(NULL, "\n")); // (서보)
 
           setPWM(_bldc, _servo);
+          break;
+
+        case 'L' :
+          int _r, _g, _b, _w = 0;
+          strtok((char *)_data,  ",");
+          _r = atoi(strtok(NULL, ","));
+          _g = atoi(strtok(NULL, ","));
+          _b = atoi(strtok(NULL, ","));
+
+          if(_r == _g && _g == _b && _r == _b) {
+            _w = _r;
+            _r = _g = _b = 0;
+          }
+          setRingColor(pixelRing.Color(_r, _g, _b, _w));
           break;
       }
       break;
