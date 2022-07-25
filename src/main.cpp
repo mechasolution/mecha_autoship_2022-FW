@@ -111,7 +111,7 @@ void setup() {
   initRing();
 
   setRingColor(pixelRing.Color(255, 0, 0, 0));
-  setOffset();
+  // setOffset();
   setRingColor(pixelRing.Color(0, 0, 0, 255));
 
   strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
@@ -119,12 +119,12 @@ void setup() {
 
   hwSerialCommandQueue = xQueueCreate(COMMAND_QUEUE_SIZE, sizeof(uint8_t));
 
-  xTaskCreate(taskHwSerial, "taskHwSerial", STACK_SIZE, NULL, 2, NULL); // 우선순위 숫자 비례
+  // xTaskCreate(taskHwSerial, "taskHwSerial", STACK_SIZE, NULL, 2, NULL); // 우선순위 숫자 비례
 
-  xTaskCreate(taskGetIMU, "taskGetIMU", STACK_SIZE*2, NULL, 1, NULL);
-  xTaskCreate(taskGetMAG, "taskGetMAG", STACK_SIZE*2, NULL, 0, NULL);
+  // xTaskCreate(taskGetIMU, "taskGetIMU", STACK_SIZE*2, NULL, 1, NULL);
+  // xTaskCreate(taskGetMAG, "taskGetMAG", STACK_SIZE*2, NULL, 0, NULL);
   xTaskCreate(taskGetGPS, "taskGetGPS", STACK_SIZE*3, NULL, 0, NULL);
-  xTaskCreate(taskHwSerialSendData, "taskHwSerialSendData", STACK_SIZE, NULL, 2, NULL);
+  // xTaskCreate(taskHwSerialSendData, "taskHwSerialSendData", STACK_SIZE, NULL, 2, NULL);
   vTaskStartScheduler();
 
   for(;;) {}
@@ -310,6 +310,7 @@ void queryOrder(uint8_t *_data, uint8_t _dataLen) {
 
 void queryGPS(uint8_t *_data, uint8_t _dataLen) {
   // $GPGGA,092725.00,4717.11399,N,00833.91590,E,1,8,1.01,499.6,M,48.0,M,,0*5B
+  Serial.println((char *)_data);
   if(_data[1] == 'G'
   && _data[2] == 'P'
   && _data[3] == 'G'
@@ -323,18 +324,27 @@ void queryGPS(uint8_t *_data, uint8_t _dataLen) {
         case 2: // 시각
           break;
         case 3: // 위도
+          Serial.println("-----");
+          Serial.println(ptr);
+          Serial.println("-----");
           if(ptr[0] == 0)
             strcpy((char*)SensorData.GPS_LATITUDE, "0000.0000");
           else
             strcpy((char*)SensorData.GPS_LATITUDE, ptr);
           break;
         case 5: // 경도
+          Serial.println("-----");
+          Serial.println(ptr);
+          Serial.println("-----");
           if(ptr[0] == 0)
             strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
           else
             strcpy((char*)SensorData.GPS_LONGITUDE, ptr);
           break;
         case 7: // 정확도
+          Serial.println("-----");
+          Serial.println(ptr);
+          Serial.println("-----");
           if(ptr[0] == '0')
             SensorData.GPS_IS_VALID = 0;
           else
@@ -397,10 +407,13 @@ void taskHwSerial(void *par) {
 }
 
 void taskGetGPS(void *par) {
-  uint8_t arrBuffUART[100];
+  uint8_t arrBuffUART[101];
   uint8_t len = 0;
   for(;;) {
-    while(Serial1.available()) {
+    if(Serial1.available()) {
+      if(len >= 99) {
+        len = 0;
+      }
       arrBuffUART[len++] = Serial1.read();
       if(arrBuffUART[len - 1] == '\n') {
         arrBuffUART[len] = '\0';
@@ -408,7 +421,7 @@ void taskGetGPS(void *par) {
         len = 0;
       }
     }
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(1 / portTICK_PERIOD_MS);
   }
 }
 
@@ -504,7 +517,7 @@ void taskHwSerialSendData(void *par) {
     Serial.print(SensorData.BLDC_POWER);
     Serial.println();
 
-    vTaskDelay(20 / portTICK_PERIOD_MS);
-    // vTaskDelay(1000 / portTICK_PERIOD_MS);
+    // vTaskDelay(20 / portTICK_PERIOD_MS);
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
   }
 }
