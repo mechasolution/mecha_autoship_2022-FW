@@ -44,8 +44,8 @@ struct SensorData_t {
   float IMU_GYR_OFFSET_Z;
 
   // GPS
-  uint8_t GPS_LATITUDE[10];  // 위도
-  uint8_t GPS_LONGITUDE[12]; // 경도
+  uint8_t GPS_LATITUDE[13];   // 위도
+  uint8_t GPS_LONGITUDE[14];  // 경도
   uint8_t GPS_IS_VALID; // 유효 여부. 0=false, 1=true
 
   // 서보모터 각도
@@ -324,48 +324,13 @@ void queryGPS(uint8_t *_data, uint8_t _dataLen) {
           break;
         case 3: // 위도
           if(ptr[0] == 0)
-            strcpy((char*)SensorData.GPS_LATITUDE, "0000.0000");
+            strcpy((char *)SensorData.GPS_LATITUDE, "0000.00000\0");
           else
             strcpy((char*)SensorData.GPS_LATITUDE, ptr);
           break;
         case 5: // 경도
           if(ptr[0] == 0)
-            strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
-          else
-            strcpy((char*)SensorData.GPS_LONGITUDE, ptr);
-          break;
-        case 7: // 정확도
-          if(ptr[0] == '0')
-            SensorData.GPS_IS_VALID = 0;
-          else
-            SensorData.GPS_IS_VALID = 1;
-          break;
-      }
-      i++;
-    }
-  }
-  // GPGGA == GNGGA
-  if(_data[1] == 'G'
-  && _data[2] == 'N'
-  && _data[3] == 'G'
-  && _data[4] == 'G'
-  && _data[5] == 'A') {
-    char *tmp = (char*)_data;
-    char *ptr = NULL;
-    uint8_t i = 1;
-    while((ptr = strsep(&tmp, ",")) != NULL) {
-      switch(i) {
-        case 2: // 시각
-          break;
-        case 3: // 위도
-          if(ptr[0] == 0)
-            strcpy((char*)SensorData.GPS_LATITUDE, "0000.0000");
-          else
-            strcpy((char*)SensorData.GPS_LATITUDE, ptr);
-          break;
-        case 5: // 경도
-          if(ptr[0] == 0)
-            strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
+            strcpy((char *)SensorData.GPS_LONGITUDE, "00000.00000\0");
           else
             strcpy((char*)SensorData.GPS_LONGITUDE, ptr);
           break;
