@@ -111,7 +111,7 @@ void setup() {
   initRing();
 
   setRingColor(pixelRing.Color(255, 0, 0, 0));
-  // setOffset();
+  setOffset();
   setRingColor(pixelRing.Color(0, 0, 0, 255));
 
   strcpy((char*)SensorData.GPS_LONGITUDE, "00000.0000");
