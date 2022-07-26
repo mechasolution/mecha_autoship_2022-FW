@@ -80,6 +80,12 @@ void initPWM() {
 
   pwmServo.write(90);
   pwmBLDC.write(90);
+
+  delay(3000);
+  pwmBLDC.write(95);
+  delay(3000);
+  pwmBLDC.write(90);
+
 }
 
 void initMAG() {
@@ -105,12 +111,13 @@ void initRing() {
 
 void setup() {
   initSerial();
+  initRing();
+  setRingColor(pixelRing.Color(255, 0, 0, 0));
+
   initIMU();
   initMAG();
   initPWM();
-  initRing();
 
-  setRingColor(pixelRing.Color(255, 0, 0, 0));
   setOffset();
   setRingColor(pixelRing.Color(0, 0, 0, 255));
 
